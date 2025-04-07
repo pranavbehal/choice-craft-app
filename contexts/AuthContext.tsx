@@ -55,7 +55,8 @@ function AuthLogic({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${baseUrl}/auth/callback?return_to=${returnTo}`,
+        // redirectTo: `${baseUrl}/auth/callback?return_to=${returnTo}`,
+        redirectTo: window.location.origin,
       },
     });
 
