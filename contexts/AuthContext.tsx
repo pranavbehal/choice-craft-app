@@ -16,6 +16,8 @@ import { User, Session } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Suspense } from "react";
+import { ensureUserExists } from "@/lib/leaderboardUtils";
+import { StateManager } from "@/lib/stateManager";
 
 // Create a separate component for the auth logic that uses useSearchParams
 function AuthLogic({ children }: { children: React.ReactNode }) {
@@ -24,24 +26,108 @@ function AuthLogic({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // Save user state to session storage whenever it changes
   useEffect(() => {
+    if (user) {
+      StateManager.saveState({
+        user: { id: user.id, email: user.email },
+        dataLoaded: true,
+      });
+    } else {
+      StateManager.clearState();
+    }
+  }, [user]);
+
+  // Handle page visibility changes to prevent unnecessary state resets
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        // Tab became visible and user is logged in
+        console.log("👁️ Tab visible with user, maintaining state");
+        // Don't reset loading state
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [user]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     // Initialize session
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      setSession(initialSession);
-      setUser(initialSession?.user ?? null);
-      setLoading(false);
-    });
+    const initializeAuth = async () => {
+      try {
+        console.log("🔐 Initializing auth session...");
+        const {
+          data: { session: initialSession },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error("Error getting session:", error);
+          if (isMounted) {
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (isMounted) {
+          console.log("📱 Initial session:", initialSession ? "Found" : "None");
+          setSession(initialSession);
+          setUser(initialSession?.user ?? null);
+
+          // Ensure user exists in database if they're logged in
+          if (initialSession?.user) {
+            await ensureUserExists(initialSession.user);
+          }
+
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Error in auth initialization:", error);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
+      console.log(
+        "🔄 Auth state change:",
+        event,
+        session ? "User logged in" : "User logged out"
+      );
+
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+      // Handle sign in events - but prevent infinite redirects
+      if (event === "SIGNED_IN" && session?.user) {
+        // Ensure user exists in the database with their Google OAuth data
+        await ensureUserExists(session.user);
+
+        // Only redirect if not already on a valid page
+        const currentPath = window.location.pathname;
+        if (currentPath === "/auth/callback" || currentPath.includes("auth")) {
+          router.push("/");
+        }
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [router]);
 
   const signInWithGoogle = async () => {
     const returnTo =
@@ -74,7 +160,15 @@ function AuthLogic({ children }: { children: React.ReactNode }) {
     } else {
       setUser(null);
       setSession(null);
+
+      // Always redirect to home page and force refresh to clear cached data
       router.push("/");
+
+      // Force refresh if already on home page to update leaderboard and mission progress
+      if (window.location.pathname === "/") {
+        window.location.reload();
+      }
+
       toast.success("Signed out successfully");
     }
   };

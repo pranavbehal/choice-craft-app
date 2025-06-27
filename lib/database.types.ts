@@ -125,6 +125,17 @@ export interface Database {
           diplomatic_decisions: number;
           investigation_decisions: number;
           last_updated: string;
+          can_resume?: boolean;
+          last_message_order?: number;
+          resumed_at?: string;
+          diplomatic_good_decisions?: number;
+          diplomatic_bad_decisions?: number;
+          strategic_good_decisions?: number;
+          strategic_bad_decisions?: number;
+          action_good_decisions?: number;
+          action_bad_decisions?: number;
+          investigation_good_decisions?: number;
+          investigation_bad_decisions?: number;
         };
         Insert: {
           id?: string;
@@ -141,6 +152,17 @@ export interface Database {
           diplomatic_decisions?: number;
           investigation_decisions?: number;
           last_updated?: string;
+          can_resume?: boolean;
+          last_message_order?: number;
+          resumed_at?: string;
+          diplomatic_good_decisions?: number;
+          diplomatic_bad_decisions?: number;
+          strategic_good_decisions?: number;
+          strategic_bad_decisions?: number;
+          action_good_decisions?: number;
+          action_bad_decisions?: number;
+          investigation_good_decisions?: number;
+          investigation_bad_decisions?: number;
         };
         Update: {
           id?: string;
@@ -157,6 +179,51 @@ export interface Database {
           diplomatic_decisions?: number;
           investigation_decisions?: number;
           last_updated?: string;
+          can_resume?: boolean;
+          last_message_order?: number;
+          resumed_at?: string;
+          diplomatic_good_decisions?: number;
+          diplomatic_bad_decisions?: number;
+          strategic_good_decisions?: number;
+          strategic_bad_decisions?: number;
+          action_good_decisions?: number;
+          action_bad_decisions?: number;
+          investigation_good_decisions?: number;
+          investigation_bad_decisions?: number;
+        };
+      };
+
+      /** Chat messages for mission conversations */
+      chat_messages: {
+        Row: {
+          id: string;
+          user_id: string;
+          mission_id: string;
+          role: string;
+          content: string;
+          metadata: Json;
+          created_at: string;
+          message_order: number;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          mission_id: string;
+          role: string;
+          content: string;
+          metadata?: Json;
+          created_at?: string;
+          message_order: number;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          mission_id?: string;
+          role?: string;
+          content?: string;
+          metadata?: Json;
+          created_at?: string;
+          message_order?: number;
         };
       };
     };

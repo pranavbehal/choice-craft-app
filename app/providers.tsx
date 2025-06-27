@@ -14,6 +14,7 @@
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
+import { PageRefreshHandler } from "@/components/page-refresh-handler";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -25,6 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         forcedTheme="dark"
         disableTransitionOnChange
       >
+        <PageRefreshHandler />
         <Toaster richColors closeButton position="top-center" />
         {children}
       </ThemeProvider>

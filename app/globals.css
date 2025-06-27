@@ -33,7 +33,6 @@ body {
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --nav-height: 4rem; /* 64px */
   }
 
   .dark {
@@ -70,22 +69,6 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    overflow-y: scroll; /* Always show scrollbar to prevent layout shift */
   }
-}
-
-@keyframes shake {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-2px);
-  }
-  75% {
-    transform: translateX(2px);
-  }
-}
-
-.animate-shake {
-  animation: shake 0.5s ease-in-out;
 }

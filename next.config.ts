@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false, // Temporarily disabled to test tab focus issues
   images: {
     remotePatterns: [
       {
