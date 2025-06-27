@@ -87,7 +87,7 @@ function NavigationSkeleton() {
 
 function NavigationContent() {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [userData, setUserData] = useState<NavigationUserData | null>(null);
   const [loading, setLoading] = useState(false);
   const loadingRef = useRef(false);
@@ -194,6 +194,10 @@ function NavigationContent() {
     };
   }, [user?.id]);
 
+  if (authLoading) {
+    return <NavigationSkeleton />;
+  }
+
   return (
     <ClientWrapper>
       <nav className="flex justify-between items-center p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
@@ -237,12 +241,13 @@ function NavigationContent() {
                     "hover:bg-muted transition-colors",
                     pathname === link.href && "bg-muted"
                   )}
-                  asChild
+                  onClick={() => {
+                    // Full page navigation using window.location for a hard refresh
+                    window.location.href = link.href;
+                  }}
                 >
-                  <Link href={link.href}>
-                    <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                    <span className="hidden xs:inline">{link.name}</span>
-                  </Link>
+                  <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden xs:inline">{link.name}</span>
                 </Button>
               );
             })}

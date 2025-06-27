@@ -110,7 +110,7 @@ function SettingsSkeleton() {
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { updateUserSettings, settings, loading } = useDatabase("settings");
 
   // Remove component key to prevent unnecessary re-mounts
@@ -230,6 +230,10 @@ export default function SettingsPage() {
       setOriginalDisplayName(currentName);
     }
   }, [settings, user]);
+
+  if (authLoading) {
+    return <SettingsSkeleton />;
+  }
 
   if (!user) {
     return (

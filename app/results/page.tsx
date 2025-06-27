@@ -276,7 +276,7 @@ function ResultsSkeleton() {
 }
 
 export default function ResultsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const {
     missionProgress,
     settings,
@@ -666,6 +666,10 @@ export default function ResultsPage() {
     achievementSort,
     processedData,
   ]);
+
+  if (authLoading) {
+    return <ResultsSkeleton />;
+  }
 
   if (!user) {
     return (

@@ -72,3 +72,35 @@ body {
     overflow-y: scroll; /* Always show scrollbar to prevent layout shift */
   }
 }
+
+/* UserWay Accessibility Widget Positioning - Force bottom-left in all environments */
+iframe[title*="UserWay"],
+iframe[src*="userway"],
+div[id*="userway"],
+div[class*="userway"] {
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 20px !important;
+  top: auto !important;
+  right: auto !important;
+  z-index: 2147483647 !important;
+}
+
+/* Additional targeting for UserWay widget container */
+body > iframe[title*="UserWay"],
+body > div[id*="userway"] {
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 20px !important;
+  top: auto !important;
+  right: auto !important;
+}
+
+/* Ensure UserWay button stays in bottom-left */
+[data-uw-feature-button] {
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 20px !important;
+  top: auto !important;
+  right: auto !important;
+}
