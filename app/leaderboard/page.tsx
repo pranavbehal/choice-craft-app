@@ -122,12 +122,15 @@ export default function LeaderboardPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const loadingRef = useRef(false); // Track if currently loading
 
-  // Load leaderboard data - force fresh load on every mount
+  // Remove component key to prevent unnecessary re-mounts
+
+  // Load leaderboard data - only load once and when user changes
   useEffect(() => {
     const loadData = async () => {
-      console.log("🔍 Leaderboard: Force loading fresh data", {
+      console.log("🔍 Leaderboard: Loading data", {
         isHidden: document.hidden,
         isCurrentlyLoading: loadingRef.current,
+        hasData: leaderboardData.length > 0,
       });
 
       // Prevent duplicate loading
@@ -136,15 +139,19 @@ export default function LeaderboardPage() {
         return;
       }
 
-      // Always load fresh data when component mounts
+      // If we already have data and user hasn't changed, don't reload
+      if (leaderboardData.length > 0 && !document.hidden) {
+        console.log("📊 Leaderboard data already loaded, skipping...");
+        setLoading(false);
+        return;
+      }
+
+      // Load data when component mounts or when user changes
       if (!document.hidden) {
-        console.log("🏆 Loading fresh leaderboard data...");
+        console.log("🏆 Loading leaderboard data...");
         loadingRef.current = true;
         try {
           setLoading(true);
-
-          // Clear existing data first
-          setLeaderboardData([]);
 
           // Try to load data for both logged in and logged out users
           const data = await getLeaderboardData(!user); // publicAccess = true when no user
@@ -161,7 +168,7 @@ export default function LeaderboardPage() {
     };
 
     loadData();
-  }, []); // Empty dependency array to load fresh data on every mount
+  }, [user?.id]); // Depend on user ID to reload when user changes
 
   // Get top 3 from original data (not filtered) - always sorted by total_xp desc
   const topThree = useMemo(() => {

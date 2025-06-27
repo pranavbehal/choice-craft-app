@@ -112,6 +112,9 @@ function SettingsSkeleton() {
 export default function SettingsPage() {
   const { user } = useAuth();
   const { updateUserSettings, settings, loading } = useDatabase("settings");
+
+  // Remove component key to prevent unnecessary re-mounts
+
   const [voiceOn, setVoiceOn] = useState(true);
   const [selectedAvatar, setSelectedAvatar] = useState(avatars[0]);
   const [displayName, setDisplayName] = useState("");

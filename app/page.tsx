@@ -36,6 +36,9 @@ export default function Home() {
   const handleProtectedAction = useProtectedAction();
   const { missionProgress, loading, error, refreshData } = useDatabase("home");
 
+  // Remove component key to prevent unnecessary re-mounts
+  // Auth and database state management should handle user changes gracefully
+
   // State for resume dialog
   const [resumeDialog, setResumeDialog] = useState<{
     isOpen: boolean;
@@ -125,47 +128,9 @@ export default function Home() {
     if (user && !loading) {
       loadAllMissionChatStatus();
     }
-  }, [user, loading, checkMissionHistory]);
+  }, [user?.id, loading]); // Remove checkMissionHistory from deps to prevent recreating
 
-  /**
-   * Refresh chat status when page becomes visible (user returns from mission)
-   */
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user && !loading) {
-        // Reload chat status when user returns to the page
-        const refreshChatStatus = async () => {
-          try {
-            const chatStatusPromises = missions.map(async (mission) => {
-              const history = await checkMissionHistory(mission.id);
-              return {
-                missionId: mission.id,
-                hasMessages: history.hasMessages,
-              };
-            });
-
-            const results = await Promise.all(chatStatusPromises);
-            const statusMap: Record<string, boolean> = {};
-
-            results.forEach(({ missionId, hasMessages }) => {
-              statusMap[missionId] = hasMessages;
-            });
-
-            setMissionChatStatus(statusMap);
-          } catch (error) {
-            console.error("Error refreshing chat status:", error);
-          }
-        };
-
-        refreshChatStatus();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [user, loading, checkMissionHistory]);
+  // Removed visibility handler that was causing conflicts with tab switching
 
   /**
    * Handles mission selection and navigation
@@ -202,6 +167,8 @@ export default function Home() {
       } else {
         // No existing messages, go directly to mission
         router.push(`/missions/${missionId}`);
+        // Force refresh to ensure proper page load
+        setTimeout(() => router.refresh(), 100);
       }
     });
   };
@@ -526,6 +493,8 @@ export default function Home() {
         onResume={() => {
           setResumeDialog((prev) => ({ ...prev, isOpen: false }));
           router.push(`/missions/${resumeDialog.missionId}?resume=true`);
+          // Force refresh to ensure proper page load
+          setTimeout(() => router.refresh(), 100);
         }}
         onStartFresh={async () => {
           setResumeDialog((prev) => ({ ...prev, isOpen: false }));
@@ -535,6 +504,8 @@ export default function Home() {
 
           // Navigate to fresh mission
           router.push(`/missions/${resumeDialog.missionId}`);
+          // Force refresh to ensure proper page load
+          setTimeout(() => router.refresh(), 100);
         }}
         onClose={() => {
           setResumeDialog((prev) => ({ ...prev, isOpen: false }));

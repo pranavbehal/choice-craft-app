@@ -15,6 +15,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { type MissionProgress } from "@/types";
 import { useAppState } from "./useAppState";
+import { toast } from "sonner";
+import { usePathname } from "next/navigation";
 
 /** Enhanced user data with XP and level */
 interface EnhancedUserSettings {
@@ -27,21 +29,24 @@ interface EnhancedUserSettings {
   level: number;
   has_seen_tutorial: boolean;
 }
-import { toast } from "sonner";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 
 export function useDatabase(pageId?: string) {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [missionProgress, setMissionProgress] = useState<MissionProgress[]>([]);
   const [settings, setSettings] = useState<EnhancedUserSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isVisible, setIsVisible] = useState(true); // Track page visibility
+  const [dataInitialized, setDataInitialized] = useState(false); // Track if data has been loaded once
   const loadingRef = useRef(false); // Track if currently loading to prevent duplicate requests
   const mountTimeRef = useRef(Date.now()); // Track when this hook instance was created
   const pageIdRef = useRef(pageId || "default"); // Track which page is using this hook
+  const userIdRef = useRef<string | null>(null); // Track current user to prevent unnecessary reloads
+  const lastPathnameRef = useRef<string>(pathname); // Track pathname changes
 
   /**
    * Retry function with exponential backoff
@@ -240,16 +245,17 @@ export function useDatabase(pageId?: string) {
   };
 
   /**
-   * Page visibility tracking
+   * Track page visibility changes - simplified to just log
    */
   useEffect(() => {
     const handleVisibilityChange = () => {
-      const newIsVisible = !document.hidden;
-      console.log(
-        "👁️ Page visibility changed:",
-        newIsVisible ? "visible" : "hidden"
-      );
-      setIsVisible(newIsVisible);
+      const visible = !document.hidden;
+      setIsVisible(visible);
+
+      if (visible) {
+        console.log(`👁️ [${pageIdRef.current}] Page became visible`);
+        // Just log, don't trigger any reloads
+      }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -262,17 +268,34 @@ export function useDatabase(pageId?: string) {
    */
   useEffect(() => {
     const loadData = async () => {
-      // Determine if we have data
-      const hasData = settings && user && settings.id === user.id;
+      const currentUserId = user?.id || null;
+
+      // Check if user has actually changed
+      const userChanged = userIdRef.current !== currentUserId;
+
+      // Check if we already have valid data for this user
+      const hasValidData =
+        user &&
+        settings &&
+        settings.id === user.id &&
+        dataInitialized &&
+        !userChanged;
 
       console.log("🔍 useDatabase loadData check:", {
         hasUser: !!user,
-        hasData,
-        isVisible,
+        hasValidData,
+        userChanged,
+        dataInitialized,
         settingsExist: !!settings,
         progressCount: missionProgress.length,
         isCurrentlyLoading: loadingRef.current,
+        previousUserId: userIdRef.current,
+        currentUserId,
+        isVisible,
       });
+
+      // Update user ref
+      userIdRef.current = currentUserId;
 
       // Prevent duplicate loading
       if (loadingRef.current) {
@@ -280,22 +303,38 @@ export function useDatabase(pageId?: string) {
         return;
       }
 
-      // Always load data for user when visible - force fresh loads
-      if (user && isVisible) {
+      // If we have valid data for the current user and user hasn't changed, don't reload
+      if (hasValidData && !userChanged) {
         console.log(
-          `🔄 [${pageIdRef.current}] Force loading fresh data for user:`,
-          user.id
+          `✅ [${pageIdRef.current}] Data already loaded for user, skipping reload`
+        );
+        // Make sure we're not stuck in loading state
+        if (loading) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // Load data for user when we don't have valid data or user changed
+      if (user) {
+        console.log(
+          `🔄 [${pageIdRef.current}] Loading data for user:`,
+          user.id,
+          userChanged ? "(user changed)" : "(initial load)"
         );
         loadingRef.current = true;
         try {
           setLoading(true);
           setError(null);
 
-          // Clear existing data first to ensure fresh load
-          setSettings(null);
-          setMissionProgress([]);
+          // Clear data if it's for a different user
+          if (userChanged || !settings || settings.id !== user.id) {
+            setSettings(null);
+            setMissionProgress([]);
+          }
 
           await Promise.all([fetchSettings(), fetchMissionProgress()]);
+          setDataInitialized(true);
           console.log(
             `✅ [${pageIdRef.current}] Database data loaded successfully`
           );
@@ -315,12 +354,13 @@ export function useDatabase(pageId?: string) {
         setSettings(null);
         setMissionProgress([]);
         setError(null);
+        setDataInitialized(false);
         loadingRef.current = false;
       }
     };
 
     loadData();
-  }, [user?.id]); // Only depend on user ID to force fresh loads
+  }, [user?.id]); // Only depend on user ID changes
 
   /**
    * Refresh all data manually
@@ -340,6 +380,46 @@ export function useDatabase(pageId?: string) {
       setLoading(false);
     }
   }, [user?.id, fetchSettings, fetchMissionProgress]);
+
+  // Reset state when navigating to a different page
+  useEffect(() => {
+    if (lastPathnameRef.current !== pathname) {
+      console.log(`📍 Page changed: ${lastPathnameRef.current} → ${pathname}`);
+      lastPathnameRef.current = pathname;
+
+      // Reset loading state for new page but preserve user data
+      if (loading && !loadingRef.current) {
+        console.log("🔄 Resetting loading state for new page");
+        setLoading(false);
+      }
+
+      // Clear any errors from previous page
+      if (error) {
+        setError(null);
+      }
+    }
+  }, [pathname, loading, error]);
+
+  // Emergency loading state recovery - if stuck loading for too long, force completion
+  useEffect(() => {
+    let emergencyTimer: NodeJS.Timeout;
+
+    if (loading && !loadingRef.current) {
+      // If loading is true but no operation is actually in progress, set a timer
+      emergencyTimer = setTimeout(() => {
+        console.warn(
+          "🚨 Database hook stuck in loading state, forcing completion"
+        );
+        setLoading(false);
+      }, 3000); // 3 second emergency timeout
+    }
+
+    return () => {
+      if (emergencyTimer) {
+        clearTimeout(emergencyTimer);
+      }
+    };
+  }, [loading]);
 
   return {
     missionProgress,

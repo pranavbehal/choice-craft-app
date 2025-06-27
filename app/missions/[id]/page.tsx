@@ -589,6 +589,8 @@ export default function MissionPage() {
       // Redirect after 3 seconds
       setTimeout(() => {
         router.push("/");
+        // Force refresh to ensure home page loads properly
+        setTimeout(() => router.refresh(), 200);
       }, 3000);
 
       return;

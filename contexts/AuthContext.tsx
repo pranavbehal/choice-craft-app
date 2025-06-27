@@ -10,7 +10,7 @@
 
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { User, Session } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
@@ -19,12 +19,21 @@ import { Suspense } from "react";
 import { ensureUserExists } from "@/lib/leaderboardUtils";
 import { StateManager } from "@/lib/stateManager";
 
+// Global flag to prevent multiple initializations
+let authInitialized = false;
+let authSubscription: { unsubscribe: () => void } | null = null;
+
 // Create a separate component for the auth logic that uses useSearchParams
 function AuthLogic({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const router = useRouter();
+
+  // Use refs to track state and prevent re-initialization
+  const mountedRef = useRef(true);
+  const initStartedRef = useRef(false);
 
   // Save user state to session storage whenever it changes
   useEffect(() => {
@@ -38,28 +47,24 @@ function AuthLogic({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  // Handle page visibility changes to prevent unnecessary state resets
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && user) {
-        // Tab became visible and user is logged in
-        console.log("👁️ Tab visible with user, maintaining state");
-        // Don't reset loading state
+    // Prevent multiple initialization attempts
+    if (authInitialized || initStartedRef.current) {
+      console.log("🔐 Auth already initialized or in progress, skipping...");
+
+      // If auth is already initialized, we need to get the current session
+      if (authInitialized && !initialized) {
+        getCurrentSession();
       }
-    };
+      return;
+    }
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [user]);
+    initStartedRef.current = true;
+    console.log("🔐 Starting auth initialization...");
 
-  useEffect(() => {
-    let isMounted = true;
-
-    // Initialize session
     const initializeAuth = async () => {
       try {
-        console.log("🔐 Initializing auth session...");
+        console.log("🔐 Getting initial session...");
         const {
           data: { session: initialSession },
           error,
@@ -67,13 +72,15 @@ function AuthLogic({ children }: { children: React.ReactNode }) {
 
         if (error) {
           console.error("Error getting session:", error);
-          if (isMounted) {
+          if (mountedRef.current) {
             setLoading(false);
+            setInitialized(true);
+            authInitialized = true;
           }
           return;
         }
 
-        if (isMounted) {
+        if (mountedRef.current) {
           console.log("📱 Initial session:", initialSession ? "Found" : "None");
           setSession(initialSession);
           setUser(initialSession?.user ?? null);
@@ -84,64 +91,122 @@ function AuthLogic({ children }: { children: React.ReactNode }) {
           }
 
           setLoading(false);
+          setInitialized(true);
+          authInitialized = true;
         }
       } catch (error) {
         console.error("Error in auth initialization:", error);
-        if (isMounted) {
+        if (mountedRef.current) {
           setLoading(false);
+          setInitialized(true);
+          authInitialized = true;
         }
       }
     };
 
-    initializeAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-
-      console.log(
-        "🔄 Auth state change:",
-        event,
-        session ? "User logged in" : "User logged out"
-      );
-
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-
-      // Handle sign in events - but prevent infinite redirects
-      if (event === "SIGNED_IN" && session?.user) {
-        // Ensure user exists in the database with their Google OAuth data
-        await ensureUserExists(session.user);
-
-        // Only redirect if not already on a valid page
-        const currentPath = window.location.pathname;
-        if (currentPath === "/auth/callback" || currentPath.includes("auth")) {
-          router.push("/");
-        }
+    // Set up auth state listener (only if not already set up)
+    const setupAuthListener = () => {
+      if (authSubscription) {
+        console.log("🔗 Auth listener already exists, skipping setup");
+        return;
       }
+
+      console.log("🔗 Setting up auth state listener...");
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log(
+          "🔄 Auth state change:",
+          event,
+          session ? "User logged in" : "User logged out"
+        );
+
+        // Update state for all mounted instances
+        if (mountedRef.current) {
+          setSession(session);
+          setUser(session?.user ?? null);
+
+          // Handle different auth events
+          if (event === "SIGNED_IN" && session?.user) {
+            await ensureUserExists(session.user);
+
+            const currentPath = window.location.pathname;
+            if (
+              currentPath === "/auth/callback" ||
+              currentPath.includes("auth")
+            ) {
+              router.push("/");
+            }
+
+            setLoading(false);
+            setInitialized(true);
+          } else if (event === "SIGNED_OUT") {
+            setLoading(false);
+            setInitialized(true);
+          } else if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+            console.log(
+              "🔄 Token refreshed or user updated - maintaining state"
+            );
+            // Don't change loading state for maintenance events
+          } else {
+            // For any other events, ensure loading is false
+            setLoading(false);
+            setInitialized(true);
+          }
+        }
+      });
+
+      authSubscription = subscription;
+    };
+
+    // Initialize auth and set up listener
+    initializeAuth().then(() => {
+      setupAuthListener();
     });
 
+    // Emergency fallback - if loading takes too long, force completion
+    const emergencyTimeout = setTimeout(() => {
+      if (mountedRef.current && loading) {
+        console.warn("🚨 Emergency: Auth loading timeout, forcing completion");
+        setLoading(false);
+        setInitialized(true);
+        authInitialized = true;
+      }
+    }, 3000); // 3 second emergency timeout (reduced from 5 to 3)
+
+    // Cleanup function
     return () => {
-      isMounted = false;
-      subscription.unsubscribe();
+      mountedRef.current = false;
+      clearTimeout(emergencyTimeout);
     };
-  }, [router]);
+  }, []);
+
+  // Function to get current session if auth is already initialized
+  const getCurrentSession = async () => {
+    try {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+      if (mountedRef.current) {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setLoading(false);
+        setInitialized(true);
+      }
+    } catch (error) {
+      console.error("Error getting current session:", error);
+      if (mountedRef.current) {
+        setLoading(false);
+        setInitialized(true);
+      }
+    }
+  };
 
   const signInWithGoogle = async () => {
-    const returnTo =
-      new URLSearchParams(window.location.search).get("return_to") || "/";
-
-    const baseUrl =
-      process.env.NODE_ENV === "production"
-        ? process.env.NEXT_PUBLIC_SITE_URL
-        : window.location.origin; // This will automatically include the correct port
-
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        // redirectTo: `${baseUrl}/auth/callback?return_to=${returnTo}`,
         redirectTo: window.location.origin,
       },
     });
@@ -161,14 +226,18 @@ function AuthLogic({ children }: { children: React.ReactNode }) {
       setUser(null);
       setSession(null);
 
-      // Always redirect to home page and force refresh to clear cached data
-      router.push("/");
+      // Reset global state
+      authInitialized = false;
+      initStartedRef.current = false;
+      setInitialized(false);
 
-      // Force refresh if already on home page to update leaderboard and mission progress
-      if (window.location.pathname === "/") {
-        window.location.reload();
+      // Clean up subscription
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+        authSubscription = null;
       }
 
+      router.push("/");
       toast.success("Signed out successfully");
     }
   };

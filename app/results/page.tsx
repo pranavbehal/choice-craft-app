@@ -282,6 +282,9 @@ export default function ResultsPage() {
     settings,
     loading: dbLoading,
   } = useDatabase("results");
+
+  // Remove component key to prevent unnecessary re-mounts
+
   const [selectedMission, setSelectedMission] = useState<string>("all");
   const [dateRange, setDateRange] = useState<string>("all");
   const [userAchievements, setUserAchievements] = useState<Achievement[]>([]);
