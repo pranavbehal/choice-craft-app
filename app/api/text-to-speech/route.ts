@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
     // Generate speech using ElevenLabs API
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=mp3_44100_64&optimize_streaming_latency=4`,
       {
         method: "POST",
         headers: {
@@ -46,10 +46,11 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_turbo_v2_5",
+          model_id: "eleven_flash_v2_5",
           voice_settings: {
             stability: 0.5, // Balance between stable and variable speech
-            similarity_boost: 0.75, // Higher similarity to original voice
+            similarity_boost: 0.75, // Higher similarity to original voice,
+            speed: 1.1,
           },
         }),
       }

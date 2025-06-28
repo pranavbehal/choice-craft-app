@@ -1,7 +1,7 @@
 /**
  * Leaderboard Page Component
  *
- * Displays competitive rankings and achievements across all Story Quest players.
+ * Displays competitive rankings and achievements across all Choice Craft players.
  * Features sortable tables and an enhanced podium for top performers.
  *
  * @component
@@ -275,7 +275,7 @@ export default function LeaderboardPage() {
             Leaderboard
           </h1>
           <p className="text-muted-foreground text-sm sm:text-base">
-            Compete with players worldwide and climb the ranks in Story Quest
+            Compete with players worldwide and climb the ranks in Choice Craft
           </p>
         </div>
 
@@ -323,7 +323,7 @@ export default function LeaderboardPage() {
                     <Trophy className="h-6 w-6 text-yellow-500" />
                   </CardTitle>
                   <CardDescription>
-                    The ultimate Story Quest legends
+                    The ultimate Choice Craft legends
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 md:p-8">

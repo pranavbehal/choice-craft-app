@@ -16,34 +16,39 @@ import { X } from "lucide-react";
 
 const steps = [
   {
-    title: "Welcome to Story Quest",
+    title: "Welcome to Choice Craft",
     content:
-      "Embark on an interactive adventure where your choices shape the story. Chat with unique AI companions and explore different worlds through immersive missions.",
+      "Embark on an interactive adventure where your choices shape the story. Chat with unique AI companions and explore immersive worlds through four distinct missions. Your decisions influence the narrative and unlock achievements as you progress.",
   },
   {
-    title: "Choose Your Mission",
+    title: "Choose Your Mission & Companion",
     content:
-      "Start by selecting one of four unique missions: explore an ancient Lost City, navigate a Space Odyssey, discover an Enchanted Forest, or solve a high-tech Cyber Heist.",
+      "Select from four unique missions: explore the Lost City with Professor Blue, journey through Space with Captain Nova, discover the Enchanted Forest with Fairy Lumi, or execute a Cyber Heist with Sergeant Nexus. Each mission has a structured storyline with clear progression milestones.",
   },
   {
-    title: "Interact with Companions",
+    title: "Interactive Storytelling",
     content:
-      "Each mission features a unique AI companion. Chat naturally with Professor Blue, Captain Nova, Fairy Lumi, or Sergeant Nexus via the chatbox at the bottom of the screen. They'll respond to your choices!",
+      "Chat naturally with your AI companion using the message box at the bottom of the screen. Your choices are categorized as Diplomatic, Strategic, Action, or Investigation decisions. Complete the main story (100% completion) or continue exploring with unlimited additional content.",
   },
   {
-    title: "Voice & Visuals",
+    title: "Voice & Visual Experience",
     content:
-      "Enable voice narration in Settings to hear your companion speak. Watch as the environment changes through AI-generated backgrounds that match your story progression.",
+      "Enable voice narration in Settings to hear your companion's unique ElevenLabs AI voice. Watch as AI-generated background images dynamically change based on your story progression, creating an immersive visual experience that adapts to your choices.",
   },
   {
-    title: "Track Your Progress",
+    title: "Profile & Achievement System",
     content:
-      "Visit the Results page to view your mission statistics, decision patterns, and achievements. Looking to customize, analyze, and download your results? The Results page is the place to go!",
+      "Customize your profile in Settings: set a display name for leaderboards, choose your avatar, and toggle voice options. Unlock achievements by completing missions and making specific decision types. Achievements are ranked by rarity and provide XP rewards.",
   },
   {
-    title: "Helpful Commands",
+    title: "Results & Leaderboard",
     content:
-      "Type 'stop' at any time to end a mission. Need to adjust settings? Click the Settings icon to customize your experience, including voice options and avatar selection. You can also sign in and out via the button in the top left of the screen.",
+      "Track your progress on the Results page with detailed analytics, decision patterns, and achievement tracking. Export your data for analysis and view comprehensive charts. Compare your XP and level with other players on the Leaderboard page.",
+  },
+  {
+    title: "Navigation & Controls",
+    content:
+      "Type 'stop' during any mission to end early (progress is saved). Use the help button (bottom-right) for assistance. Your progress automatically saves, allowing you to resume missions from where you left off. Sign in/out using the button in the top-left corner.",
   },
 ];
 

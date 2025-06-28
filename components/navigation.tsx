@@ -11,7 +11,6 @@
 "use client";
 
 import { Suspense, useEffect, useState, useRef } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn, getUserDisplayName } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -201,9 +200,12 @@ function NavigationContent() {
   return (
     <ClientWrapper>
       <nav className="flex justify-between items-center p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-        <Link href="/" className="text-xl font-bold">
-          Story Quest
-        </Link>
+        <button
+          onClick={() => (window.location.href = "/")}
+          className="text-xl font-bold opacity-100 hover:opacity-100"
+        >
+          Choice Craft
+        </button>
 
         <div className="flex items-center space-x-2 sm:space-x-6">
           {user && userData && !loading && (

@@ -1,4 +1,4 @@
-# Story Quest - Interactive Story Adventure
+# Choice Craft - Interactive Story Adventure
 
 ## FBLA Introduction to Programming 2024-25
 
@@ -11,7 +11,7 @@ An interactive storytelling application where users engage with AI companions ac
 **Original Prompt:**
 "Write an interactive story that occasionally asks the user what they'd like to do, and changes where the story goes based on user input. Allow the user to stop interacting with the story by saying 'stop.'"
 
-**How Story Quest Addresses & Exceeds the Prompt:**
+**How Choice Craft Addresses & Exceeds the Prompt:**
 
 1. **Core Requirement: Interactive Story**
 
@@ -49,7 +49,7 @@ An interactive storytelling application where users engage with AI companions ac
      - Robust error handling
      - Secure authentication
 
-While the basic prompt asked for a simple interactive story with a stop function, Story Quest is a fully-functioning application that turned this concept into an immersive adventure platform with AI-powered interactions, visual and audio elements, and comprehensive progress tracking.
+While the basic prompt asked for a simple interactive story with a stop function, Choice Craft is a fully-functioning application that turned this concept into an immersive adventure platform with AI-powered interactions, visual and audio elements, and comprehensive progress tracking.
 
 ### 🌟 Core Features
 

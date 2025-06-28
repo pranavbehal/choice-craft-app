@@ -29,7 +29,7 @@ export function QuestionButton() {
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="mb-1 text-2xl">
-            Story Quest Help Center
+            Choice Craft Help Center
           </DialogTitle>
         </DialogHeader>
         <InteractiveMenu />

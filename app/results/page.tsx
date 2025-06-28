@@ -1032,7 +1032,7 @@ export default function ResultsPage() {
             </h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               {getContextText(
-                "A comprehensive analysis of your journey on Story Quest",
+                "A comprehensive analysis of your journey on Choice Craft",
                 "Analysis of your progress in {mission}"
               )}
             </p>
@@ -1869,7 +1869,7 @@ export default function ResultsPage() {
                       Achievement Gallery
                     </CardTitle>
                     <CardDescription>
-                      Your accomplishments and progress in Story Quest (
+                      Your accomplishments and progress in Choice Craft (
                       {userAchievements.length}/{achievements.length} unlocked)
                     </CardDescription>
                   </div>

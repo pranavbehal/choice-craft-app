@@ -86,6 +86,9 @@ export default function MissionPage() {
 
   /** Dialogue and interaction state */
   const [isTyping, setIsTyping] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  const [userMessageShimmer, setUserMessageShimmer] = useState(false);
+  const [sentUserMessage, setSentUserMessage] = useState("");
   const [currentText, setCurrentText] = useState("");
   const [systemMessage, setSystemMessage] = useState("");
   const [showUserMessage, setShowUserMessage] = useState(false);
@@ -96,6 +99,9 @@ export default function MissionPage() {
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  /** Utility to get ISO timestamp for console logs */
+  const ts = () => new Date().toISOString();
 
   /** Database integration */
   const {
@@ -296,12 +302,31 @@ export default function MissionPage() {
           .toString()
           .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 
-        // Save time to database
-        await updateMissionProgress({
+        // Use same-origin API route to avoid CORS issues
+        const requestUrl = "/api/save-progress";
+
+        const payload = {
+          user_id: user.id,
           mission_id: currentMission.id,
           time_spent: timeInterval,
-        });
+          last_updated: new Date().toISOString(),
+        };
+
+        const body = JSON.stringify(payload);
+
+        // Use sendBeacon if available (fire-and-forget), otherwise keepalive fetch
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(requestUrl, body);
+        } else {
+          fetch(requestUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+            keepalive: true,
+          });
+        }
       } catch (error) {
+        // Non-fatal
         console.error("Error saving time on page exit:", error);
       }
     };
@@ -328,7 +353,7 @@ export default function MissionPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [user, totalTimeSpent, currentMission.id, updateMissionProgress]);
+  }, [user, totalTimeSpent, currentMission.id]);
 
   /**
    * Load existing mission progress and stats
@@ -425,10 +450,31 @@ export default function MissionPage() {
       missionStoryline: currentMission.storyline,
     },
     onFinish: () => {
-      setIsTyping(false);
-      // console.log(messages);
+      console.log(
+        `[${ts()}] AI Generation: Streaming finished; awaiting post-processing`
+      );
+      console.log("[Page] useChat onFinish - messages:", messages);
+    },
+    onError: (error) => {
+      console.error("[Page] useChat error:", error);
+    },
+    onResponse: (response) => {
+      console.log(
+        "[Page] useChat response received:",
+        response.status,
+        response.headers
+      );
     },
   });
+
+  /**
+   * Enhanced input change handler that tracks user typing state
+   */
+  const handleUserInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const hasContent = e.target.value.trim().length > 0;
+    setIsUserTyping(hasContent);
+    handleInputChange(e);
+  };
 
   // Early restoration effect - runs immediately when resume=true is detected
   useEffect(() => {
@@ -509,130 +555,108 @@ export default function MissionPage() {
   }, [shouldResumeImmediately, user, loadChatHistoryWithMetadata, setMessages]);
 
   /**
-   * Processes user input and handles commands
-   * @param {React.FormEvent} e - Form submission event
+   * Handles the user issuing a stop command. Blurs the page, shows a toast,
+   * tracks the event for achievements, and redirects home after 3 seconds.
+   */
+  const handleStopCommand = async () => {
+    if (isStopping) return; // Prevent multiple triggers
+
+    try {
+      setIsStopping(true);
+
+      // Track stop command for achievement purposes
+      if (user) {
+        await trackStopCommand(user.id, currentMission.id);
+      }
+
+      // Inform the user via toast
+      toast.info(
+        "🚪 Exiting mission... Your progress will be saved. Redirecting to home in 3 seconds.",
+        {
+          duration: 3000,
+        }
+      );
+
+      // Give the toast time to display, then navigate home
+      setTimeout(() => {
+        router.push("/");
+      }, 3000);
+    } catch (error) {
+      console.error("Error handling stop command:", error);
+      // Fallback: navigate home even if tracking failed
+      router.push("/");
+    }
+  };
+
+  /**
+   * Handles sending a message to the AI
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Syntactic validation - checks for empty/whitespace, if the AI is typing, or if the user has triggered the stop command
-    if (!input.trim() || isTyping || isStopping) return;
+    // Normalize input and detect stop command BEFORE any other processing
+    const rawInput = input.trim();
+    if (!rawInput) return;
 
-    const userInput = input.trim().toLowerCase();
-
-    // Semantic validation - checks message length
-    if (userInput.length > 500) {
-      toast.error("Your message is too long (maximum 500 characters)");
-      return;
-    }
-
-    // Check for stop command
-    if (userInput === "stop") {
-      setIsStopping(true);
-
-      if (user) {
-        try {
-          // Save current progress
-          const hours = Math.floor(totalTimeSpent / 3600);
-          const minutes = Math.floor((totalTimeSpent % 3600) / 60);
-          const seconds = totalTimeSpent % 60;
-          const timeInterval = `${hours.toString().padStart(2, "0")}:${minutes
-            .toString()
-            .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-
-          await updateMissionProgress({
-            mission_id: currentMission.id,
-            completion_percentage: Math.max(progress, 5), // Minimum progress for stopping
-            time_spent: timeInterval,
-            decisions_made: currentMissionStats.decisions_made,
-            good_decisions: currentMissionStats.good_decisions,
-            bad_decisions: currentMissionStats.bad_decisions,
-            diplomatic_decisions: currentMissionStats.diplomatic_decisions,
-            strategic_decisions: currentMissionStats.strategic_decisions,
-            action_decisions: currentMissionStats.action_decisions,
-            investigation_decisions:
-              currentMissionStats.investigation_decisions,
-            // Include detailed decision tracking
-            diplomatic_good_decisions:
-              currentMissionStats.diplomatic_good_decisions,
-            diplomatic_bad_decisions:
-              currentMissionStats.diplomatic_bad_decisions,
-            strategic_good_decisions:
-              currentMissionStats.strategic_good_decisions,
-            strategic_bad_decisions:
-              currentMissionStats.strategic_bad_decisions,
-            action_good_decisions: currentMissionStats.action_good_decisions,
-            action_bad_decisions: currentMissionStats.action_bad_decisions,
-            investigation_good_decisions:
-              currentMissionStats.investigation_good_decisions,
-            investigation_bad_decisions:
-              currentMissionStats.investigation_bad_decisions,
-          });
-
-          // Track stop command for achievements
-          await trackStopCommand(user.id, currentMission.id);
-
-          toast.success(
-            "Progress saved! You will be redirected to the home page in 3 seconds."
-          );
-        } catch (error) {
-          console.error("Error saving progress on stop:", error);
-          toast.error("Error saving progress, but redirecting anyway.");
-        }
-      }
-
-      // Disable further interactions
+    // Detect variations like "stop", "STOP!", "stop." etc.
+    const isStopCommand = /^stop[.!?]*$/i.test(rawInput);
+    if (isStopCommand) {
+      await handleStopCommand();
+      // Clear the input field after handling the stop command
       handleInputChange({
         target: { value: "" },
       } as React.ChangeEvent<HTMLInputElement>);
-
-      // Redirect after 3 seconds
-      setTimeout(() => {
-        router.push("/");
-        // Force refresh to ensure home page loads properly
-        setTimeout(() => router.refresh(), 200);
-      }, 3000);
-
       return;
     }
 
-    // Regular message handling
-    if (messages.length === 0) {
-      setShowTitle(false);
-    }
+    // Guard clauses
+    if (isTyping) return;
 
-    const userMessage = `Me: ${userInput}`;
-    setShowUserMessage(true);
-    setCurrentText(userMessage);
+    console.log(
+      `[${ts()}] AI Generation: User message sent, starting generation`
+    );
 
+    // Capture the outgoing message and immediately clear the input box
+    const outgoing = rawInput;
+    setSentUserMessage(outgoing);
+    setUserMessageShimmer(true);
+
+    // Persist USER message to database (fire-and-forget)
+    saveChatMessage(
+      {
+        id: `${Date.now()}`,
+        role: "user",
+        content: outgoing,
+        createdAt: new Date(),
+      },
+      {}
+    ).catch((err) => console.error("Failed to save user message:", err));
+
+    // Clear the input field right away so the user can start typing again
     handleInputChange({
       target: { value: "" },
     } as React.ChangeEvent<HTMLInputElement>);
 
-    setTimeout(async () => {
-      setIsTyping(true);
-      const userMessageObj = {
-        content: userMessage,
-        role: "user" as const,
-        id: `user-${Date.now()}`,
-        createdAt: new Date(),
-      };
+    setCurrentText(""); // Reset display text
 
-      // Save user message to database
-      try {
-        const saveResult = await saveChatMessage(userMessageObj);
-        console.log("User message saved:", saveResult);
-      } catch (error) {
-        console.error("Failed to save user message:", error);
-        // Continue anyway - don't block the chat flow
-      }
+    // Reset user typing state and mark AI as typing
+    setIsUserTyping(false);
+    setIsTyping(true);
 
-      await append({
-        content: userMessage,
-        role: "user",
-      });
-      setShowUserMessage(false);
-    }, 500);
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+    }
+
+    try {
+      await append({ role: "user", content: outgoing });
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setIsTyping(false);
+      setUserMessageShimmer(false);
+    }
   };
 
   /**
@@ -663,6 +687,8 @@ export default function MissionPage() {
 
       const processMessage = async () => {
         try {
+          // Keep shimmer visible until typewriter actually starts
+
           console.log(
             "Processing NEW AI message - saving to DB and handling decisions"
           );
@@ -699,48 +725,107 @@ export default function MissionPage() {
             return;
           }
 
-          // Handle image generation first (before saving message)
-          let generatedImageUrl = null;
-          if (responseData.imagePrompt) {
-            try {
-              console.log(
-                "Generating image for prompt:",
-                responseData.imagePrompt
-              );
-              const imageResponse = await fetch("/api/generate-image", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt: responseData.imagePrompt }),
-              });
+          // Extract character name and speech text for audio
+          const [characterName, speechText] = text.split(": ");
 
-              const imageData = await imageResponse.json();
-              if (imageData.imageUrl) {
-                generatedImageUrl = imageData.imageUrl;
-                setBackgroundImage(imageData.imageUrl);
+          // Start parallel operations immediately: image generation, audio generation, and typewriter
+          const parallelOperations = [];
+
+          // Handle image generation first (before saving message)
+          if (responseData.imagePrompt) {
+            const imagePromise = (async () => {
+              try {
                 console.log(
-                  "Image generated and background updated:",
-                  imageData.imageUrl
+                  `[${ts()}] Image Generation: Request sent for prompt: ${responseData.imagePrompt.slice(
+                    0,
+                    100
+                  )}...`
                 );
+                const imageResponse = await fetch("/api/generate-image", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ prompt: responseData.imagePrompt }),
+                });
+                const imageData = await imageResponse.json();
+                console.log(`[${ts()}] Image Generation: Response received`);
+                if (imageData.imageUrl) {
+                  setBackgroundImage(imageData.imageUrl);
+                  console.log("Image updated:", imageData.imageUrl);
+                  return imageData.imageUrl;
+                }
+                return null;
+              } catch (error) {
+                console.log(`[${ts()}] Image Generation: Error occurred`);
+                console.error("Error generating image:", error);
+                return null;
               }
-            } catch (error) {
-              console.error("Error generating image:", error);
-            }
+            })();
+            parallelOperations.push(imagePromise);
           }
+
+          // Start audio generation in parallel
+          const audioPromise = (async () => {
+            if (settings?.voice_on && speechText && characterName) {
+              try {
+                await playTextToSpeech(speechText, characterName);
+              } catch (error) {
+                console.error("Error with audio playback:", error);
+              }
+            }
+          })();
+          parallelOperations.push(audioPromise);
+
+          // Start typewriter effect immediately (don't wait for audio/image)
+          const typewriterPromise = (async () => {
+            // Wait for audio to start playing before beginning typewriter
+            if (settings?.voice_on && speechText && characterName) {
+              try {
+                await audioPromise; // Wait for audio to begin
+              } catch (error) {
+                console.log("Audio failed, starting typewriter anyway");
+              }
+            }
+
+            // Hide shimmer now that typewriter will begin
+            setUserMessageShimmer(false);
+            let index = 0;
+            return new Promise<void>((resolve) => {
+              const typewriterInterval = setInterval(() => {
+                if (index <= text.length) {
+                  setCurrentText(text.slice(0, index));
+                  index++;
+                } else {
+                  clearInterval(typewriterInterval);
+                  setIsTyping(false);
+                  resolve();
+                }
+              }, 50); // Slower typewriter: 50ms per character instead of 30ms
+            });
+          })();
+          parallelOperations.push(typewriterPromise);
+
+          // Wait for image generation to complete for database save
+          const [generatedImageUrl] = await Promise.allSettled(
+            parallelOperations
+          );
+          const imageUrl =
+            generatedImageUrl.status === "fulfilled"
+              ? generatedImageUrl.value
+              : null;
 
           // Save the AI message to database (after image generation)
           try {
             const metadataToSave = {
               imagePrompt: responseData.imagePrompt,
               decisionAnalysis: responseData.decisionAnalysis,
-              backgroundImage:
-                generatedImageUrl || backgroundImage || undefined,
+              backgroundImage: imageUrl || backgroundImage || undefined,
             };
 
             const saveResult = await saveChatMessage(
               lastMessage,
               metadataToSave
             );
-            console.log("AI message saved with background image:", saveResult);
+            console.log("AI message saved:", saveResult);
           } catch (error) {
             console.error("Failed to save AI message:", error);
             // Continue anyway - don't block the chat flow
@@ -782,39 +867,10 @@ export default function MissionPage() {
           } else {
             console.log(`AI provided same progress: ${progress}% (no change)`);
           }
-
-          // Extract character name and speech text
-          const [characterName, speechText] = text.split(": ");
-
-          // Wait for audio to start playing before starting text animation
-          try {
-            await playTextToSpeech(speechText, characterName);
-
-            // Start typewriter effect
-            let index = 0;
-            const typewriterInterval = setInterval(() => {
-              if (index <= text.length) {
-                setCurrentText(text.slice(0, index));
-                index++;
-              } else {
-                clearInterval(typewriterInterval);
-                setIsTyping(false);
-              }
-            }, 30); // Adjust timing to match speech rate
-
-            // Cleanup interval on unmount
-            return () => {
-              clearInterval(typewriterInterval);
-            };
-          } catch (error) {
-            console.error("Error with audio playback:", error);
-            // Fallback to instant text display if audio fails
-            setCurrentText(text);
-            setIsTyping(false);
-          }
         } catch (error) {
           console.error("Error processing message:", error);
           setIsTyping(false);
+          setUserMessageShimmer(false);
         }
       };
 
@@ -1060,6 +1116,9 @@ export default function MissionPage() {
     if (!settings?.voice_on) return;
 
     try {
+      console.log(
+        `[${ts()}] Audio Generation: Request sent for character: ${character}`
+      );
       // Stop any currently playing audio
       if (audioRef.current) {
         audioRef.current.pause();
@@ -1077,6 +1136,7 @@ export default function MissionPage() {
       if (!response.ok) throw new Error("Failed to generate speech");
 
       const audioBlob = await response.blob();
+      console.log(`[${ts()}] Audio Generation: Response received`);
       const audioUrl = URL.createObjectURL(audioBlob);
 
       if (audioRef.current) {
@@ -1098,14 +1158,18 @@ export default function MissionPage() {
         });
       }
     } catch (error) {
+      console.log(`[${ts()}] Audio Generation: Error occurred`);
       console.error("Error playing text to speech:", error);
       throw error;
     }
   };
 
-  // Add this to see all messages
+  // Debug messages
   useEffect(() => {
-    // console.log("Current messages:", messages);
+    if (messages.length > 0) {
+      console.log("[Page] Messages updated:", messages.length, "total");
+      console.log("[Page] Last message:", messages[messages.length - 1]);
+    }
   }, [messages]);
 
   // Handle mission finding
@@ -1345,7 +1409,7 @@ export default function MissionPage() {
           canResume: persistenceChatState?.can_resume,
           totalMessages: persistenceChatState?.total_messages,
           currentProgress: progress,
-          messagesLength: messages.length,
+          messagesLength: persistenceChatState?.total_messages,
           chatLoading,
           resumeDialogShown: resumeDialogShown.current,
           persistenceChatState,
@@ -1517,18 +1581,30 @@ export default function MissionPage() {
     }
   }, [settings]);
 
-  // Debug messages
-  useEffect(() => {
-    if (messages.length > 0) {
-      // console.log("Messages updated:", messages);
-      // console.log("Last message:", messages[messages.length - 1]);
-    }
-  }, [messages]);
+  const lastMessage = messages[messages.length - 1];
 
-  /**
-   * Updates mission progress and handles completion
-   * @param {number} newProgress - Updated progress value
-   */
+  // Update the character image opacity based on message role
+  const getCharacterOpacity = (role: string) => {
+    // User is typing - show user as active
+    if (isUserTyping) {
+      return role === "user" ? "opacity-100 scale-100" : "opacity-40 scale-75";
+    }
+    // AI is processing/responding - show AI as active
+    if (isTyping) {
+      return role === "assistant"
+        ? "opacity-100 scale-100"
+        : "opacity-40 scale-75";
+    }
+    // Default: show based on last message
+    if (!lastMessage) return "opacity-40 scale-75";
+    if (role === "assistant" && lastMessage.role === "assistant")
+      return "opacity-100 scale-100";
+    if (role === "user" && lastMessage.role === "user")
+      return "opacity-100 scale-100";
+    return "opacity-40 scale-75";
+  };
+
+  // Update the character image opacity based on message role
   const updateProgress = (newProgress: number) => {
     if (newProgress > progress) {
       setProgressStatus("increase");
@@ -1541,29 +1617,20 @@ export default function MissionPage() {
     setTimeout(() => setProgressStatus("same"), 1000);
   };
 
-  const lastMessage = messages[messages.length - 1];
-
-  // Update the character image opacity based on message role
-  const getCharacterOpacity = (role: string) => {
-    if (!lastMessage) return "opacity-40 scale-75";
-    if (role === "assistant" && lastMessage.role === "assistant")
-      return "opacity-100 scale-100";
-    if (role === "user" && lastMessage.role === "user")
-      return "opacity-100 scale-100";
-    return "opacity-40 scale-75";
-  };
-
   // Update getDisplayMessage to handle the typewriter effect
   const getDisplayMessage = () => {
-    if (showUserMessage) return currentText;
-    if (isTyping && !currentText) return "Loading...";
+    // Show outgoing user message (shimmer) until AI reply begins
+    if (userMessageShimmer && sentUserMessage) {
+      return `Me: ${sentUserMessage}`;
+    }
+
     if (!lastMessage) return "Begin your adventure by saying hello...";
 
     try {
       if (lastMessage.role === "user") {
         return lastMessage.content;
       } else {
-        return currentText || "Loading...";
+        return currentText || ""; // No Loading fallback
       }
     } catch (error) {
       console.error("Error parsing message:", error);
@@ -1703,8 +1770,10 @@ export default function MissionPage() {
                 {/* Dialogue Box */}
                 <div className="bg-[#F6E6C5] border-4 border-[#8B7355] rounded-2xl p-6 shadow-lg">
                   <p className="text-black text-lg min-h-[28px] [&>span]:font-bold">
-                    {isTyping && !currentText ? (
-                      <span className="animate-pulse">Loading...</span>
+                    {userMessageShimmer ? (
+                      <span className="animate-pulse font-medium">
+                        {getDisplayMessage()}
+                      </span>
                     ) : (
                       getDisplayMessage()
                         .split(": ")
@@ -1737,9 +1806,15 @@ export default function MissionPage() {
             >
               <Input
                 value={input}
-                onChange={handleInputChange}
-                placeholder="Type your message..."
-                className="bg-card h-12 text-lg px-4 border-2 focus:border-primary"
+                onChange={handleUserInputChange}
+                placeholder={
+                  isTyping ? "AI is thinking..." : "Type your message..."
+                }
+                disabled={isTyping}
+                className={cn(
+                  "bg-card h-12 text-lg px-4 border-2 focus:border-primary",
+                  isTyping && "opacity-50 cursor-not-allowed"
+                )}
               />
               <Button
                 type="submit"

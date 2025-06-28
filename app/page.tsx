@@ -324,8 +324,8 @@ export default function Home() {
           </h1>
           <div className="text-muted-foreground mb-8 max-w-2xl mx-auto text-lg space-y-3">
             <p>
-              Welcome to Story Quest, where your choices shape unique adventures
-              across four distinct worlds.
+              Welcome to Choice Craft, where your choices shape unique
+              adventures across four distinct worlds.
             </p>
             <p>
               Track your progress, earn achievements, and explore dynamically
@@ -384,6 +384,7 @@ export default function Home() {
                       src={mission.image}
                       alt={`${mission.title} mission background`}
                       fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       className="object-cover opacity-20 group-hover:opacity-50 transition-opacity duration-300"
                       priority={index < 2} // Priority load for first two images
                     />

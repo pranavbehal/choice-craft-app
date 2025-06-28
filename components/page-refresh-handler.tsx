@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 /**
  * PageRefreshHandler
@@ -10,15 +10,9 @@ import { useEffect, useRef } from "react";
  * is reset and avoids any stale data / auth issues.
  */
 export function PageRefreshHandler() {
-  const mountedRef = useRef(false);
-
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        if (!mountedRef.current) {
-          mountedRef.current = true; // Skip first visibility event
-          return;
-        }
         console.log("🔄 Tab became visible – performing full reload");
         window.location.reload(); // Hard reload ensures fresh state
       }

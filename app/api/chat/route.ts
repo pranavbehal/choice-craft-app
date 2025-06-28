@@ -1,14 +1,11 @@
 /**
  * Chat API Route Handler
  *
- * Processes chat requests and generates AI responses using OpenAI's API.
+ * Processes chat requests and generates AI responses using Google's Gemini API.
  * Handles message formatting, progress tracking, and scene generation prompts.
  *
  * @route POST /api/chat
  */
-
-import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
 
 type DifficultyLevel = "Beginner" | "Intermediate" | "Advanced" | "Expert";
 
@@ -30,6 +27,80 @@ interface MissionStoryline {
   milestones: MissionMilestone[];
 }
 
+// Define the structured response schema
+const responseSchema = {
+  type: "object",
+  properties: {
+    userResponse: {
+      type: "string",
+      description:
+        "Character dialogue message starting with character name followed by colon, must end with a clear choice for the user",
+    },
+    imagePrompt: {
+      type: "string",
+      description:
+        "Detailed scene description for image generation, artistic style, usually no people visible",
+    },
+    progress: {
+      type: "integer",
+      minimum: 0,
+      maximum: 100,
+      description: "Mission progress percentage from 0 to 100",
+    },
+    decisionAnalysis: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          enum: ["diplomatic", "strategic", "action", "investigation", "none"],
+          description: "Classification of the user's last decision",
+        },
+        quality: {
+          type: "string",
+          enum: ["good", "bad"],
+          description: "Whether the user's decision was beneficial or harmful",
+        },
+        isStoryDecision: {
+          type: "boolean",
+          description: "Whether this was a meaningful story-advancing choice",
+        },
+        progressAdvancement: {
+          type: "integer",
+          minimum: 0,
+          maximum: 15,
+          description: "How much this decision advances the story (0-15 scale)",
+        },
+        reasoning: {
+          type: "string",
+          description:
+            "Brief explanation starting with 'You chose to...' describing the decision",
+        },
+        difficultyBonus: {
+          type: "number",
+          minimum: 1.0,
+          maximum: 3.0,
+          description: "XP multiplier based on mission difficulty",
+        },
+      },
+      required: [
+        "type",
+        "quality",
+        "isStoryDecision",
+        "progressAdvancement",
+        "reasoning",
+        "difficultyBonus",
+      ],
+    },
+  },
+  required: ["userResponse", "progress", "decisionAnalysis"],
+  propertyOrdering: [
+    "userResponse",
+    "imagePrompt",
+    "progress",
+    "decisionAnalysis",
+  ],
+};
+
 /**
  * POST request handler for chat interactions
  * @param {Request} req - Incoming request object containing messages and context
@@ -44,28 +115,34 @@ export async function POST(req: Request) {
     missionStoryline,
   } = await req.json();
 
+  console.log("[Chat API] Incoming request", {
+    messagesCount: messages?.length,
+    currentProgress,
+    missionDifficulty,
+  });
+
   // Map difficulty to scoring multipliers
   const difficultySettings: Record<DifficultyLevel, DifficultySettings> = {
     Beginner: {
-      goodDecisionThreshold: 0.5, // 50% chance for good decision (more critical)
+      goodDecisionThreshold: 0.5,
       xpMultiplier: 1.0,
       progressMultiplier: 1.2,
       description: "encouraging but requiring thoughtful decisions",
     },
     Intermediate: {
-      goodDecisionThreshold: 0.6, // 60% chance for good decision (more critical)
+      goodDecisionThreshold: 0.6,
       xpMultiplier: 1.2,
       progressMultiplier: 1.0,
       description: "balanced with meaningful challenge",
     },
     Advanced: {
-      goodDecisionThreshold: 0.7, // 70% chance for good decision (harder to get good)
+      goodDecisionThreshold: 0.7,
       xpMultiplier: 1.5,
       progressMultiplier: 0.8,
       description: "challenging and demanding precise choices",
     },
     Expert: {
-      goodDecisionThreshold: 0.8, // 80% chance for good decision (very hard to get good)
+      goodDecisionThreshold: 0.8,
       xpMultiplier: 2.0,
       progressMultiplier: 0.6,
       description: "extremely challenging with high stakes",
@@ -154,6 +231,33 @@ export async function POST(req: Request) {
     difficulty.description
   }.
   
+  CRITICAL: Every response MUST end with a clear choice for the user to make. NEVER EVER just acknowledge their decision or describe what's happening. Present choices naturally within the narrative flow - DO NOT use A/B/C labels.
+
+  MANDATORY: You MUST respond with valid JSON matching the exact schema. Your response will be parsed as JSON.
+
+  Decision Analysis Guidelines (DIFFICULTY-ADJUSTED):
+  - "type": Classify the USER'S LAST MESSAGE as: diplomatic, strategic, action, investigation, or none
+  - "quality": Mark as "good" only if decision shows ${
+    missionDifficulty === "Expert"
+      ? "exceptional wisdom"
+      : missionDifficulty === "Advanced"
+      ? "thoughtful planning"
+      : missionDifficulty === "Intermediate"
+      ? "reasonable thinking"
+      : "basic good judgment"
+  }
+  - "difficultyBonus": Always set to ${difficulty.xpMultiplier}
+  - "progressAdvancement": 0-15 scale, multiply by ${
+    difficulty.progressMultiplier
+  }
+
+  Examples of natural choice presentation:
+  - "Do we set up defenses or enter the ruins immediately?"
+  - "Should we take the narrow passage or the wide path?"
+  - "Do we negotiate with them or try to sneak past?"
+
+  EVERY response must give the user a choice. NO EXCEPTIONS.
+
   DIFFICULTY-BASED SCORING:
   - For ${missionDifficulty} missions, good decisions should be ${
     difficulty.goodDecisionThreshold > 0.6
@@ -179,172 +283,198 @@ export async function POST(req: Request) {
       : "mild setbacks"
   }
 
-  CRITICAL: Every response MUST end with a clear choice for the user to make. NEVER EVER just acknowledge their decision or describe what's happening. FORBIDDEN phrases include: "Good choice!", "Smart move!", "Let's do X", "We need to Y" without immediately giving options. 
+  RESPONSE FORMAT EXAMPLE (MANDATORY):
+  "Character: One-line outcome. New situation with built-in choices—Do we do X, Y, or Z?"
 
-  MANDATORY FORMAT: Every response must follow this pattern:
-  1. Brief description of what happens as a result of their choice (1 sentence max)
-  2. IMMEDIATELY present the next situation that requires a decision
-  3. Present the decision options naturally within the narrative flow - DO NOT use A/B/C labels
+  WRONG / RIGHT EXAMPLES:
+  - WRONG: "Smart move! Let's take our time to study the mechanism carefully."
+  - RIGHT: "We examine the mechanism and discover three activation methods. Do we use the glowing crystal, input the ancient symbols, or try the modern keypad?"
 
-  WRONG: "Smart move! Let's take our time to study the mechanism carefully."
-  RIGHT: "You study the mechanism and notice three activation sequences. Do we activate the glowing blue sequence, try the ancient red symbols, or use the modern-looking silver panel?"
+  PROGRESS GUIDELINES (STORYLINE-DRIVEN):
+  - Never exceed 100% progress; mission ends at 100%.
+  - Small side decisions: 1-3% progress.
+  - Major plot decisions: 5-8% progress.
+  - Milestone events: 8-15% progress.
+  - Bad decisions may decrease progress.
 
-  CRITICAL: You MUST return your responses ONLY as a valid JSON object with these exact fields. DO NOT include any text before or after the JSON object. The response must be parseable by JSON.parse():
-  {
-    "userResponse": "Your actual dialogue message starting with your name (e.g., 'Professor Blue: Hello!'). MUST end with a clear choice presented naturally like 'Do we set up defenses or enter the ruins immediately?'. NEVER use A/B/C labels. NEVER just acknowledge their previous choice - always give them the NEXT choice to make.",
-    "imagePrompt": "Detailed scene description for image generation. Should be artistic and usually have no people visible. Good example: A mystical ancient stone city hidden in dense jungle, with crumbling temples, overgrown with vines, mysterious glowing symbols carved into walls, mist rolling through narrow streets, dramatic lighting, digital art style",
-    "progress": number (0-100, current: ${currentProgress}),
-    "decisionAnalysis": {
-      "type": "diplomatic|strategic|action|investigation|none",
-      "quality": "good|bad",
-      "isStoryDecision": boolean,
-      "progressAdvancement": number,
-      "reasoning": "Brief explanation starting with 'You chose to...' describing the decision classification",
-      "difficultyBonus": number (XP multiplier based on mission difficulty: ${
-        difficulty.xpMultiplier
-      })
-    }
-  }
+  CHOICE GUIDELINES:
+  - Forbidden: A/B/C labels or praising statements without new options.
+  - Always end with clear, naturally phrased options ending in a question mark.
 
-  Decision Analysis Guidelines (DIFFICULTY-ADJUSTED):
-  - "type": Classify the USER'S LAST MESSAGE (not your response) as one of the decision types:
-    * "diplomatic" - negotiation, persuasion, talking, peaceful solutions
-    * "strategic" - planning, thinking, analyzing, careful approaches  
-    * "action" - fighting, running, physical actions, aggressive moves
-    * "investigation" - searching, examining, gathering information
-    * "none" - just questions, clarifications, or greetings
-    
-  - "quality": Evaluate if the USER'S decision was beneficial (good) or harmful (bad) to the story outcome
-    * IMPORTANT: Every story decision MUST be classified as either "good" or "bad" - NEVER use "neutral"
-    * For ${missionDifficulty} missions: Be ${
-    difficulty.goodDecisionThreshold > 0.6
-      ? "very strict"
-      : difficulty.goodDecisionThreshold > 0.4
-      ? "moderately strict"
-      : "reasonably lenient"
-  } when marking decisions as "good"
-    * Only mark as "good" if the decision shows ${
-      missionDifficulty === "Expert"
-        ? "exceptional wisdom and careful consideration"
-        : missionDifficulty === "Advanced"
-        ? "thoughtful planning and skill"
-        : missionDifficulty === "Intermediate"
-        ? "reasonable thinking"
-        : "basic good judgment"
-    }
-    * Bad decisions should have ${
-      missionDifficulty === "Expert"
-        ? "major story consequences"
-        : missionDifficulty === "Advanced"
-        ? "significant setbacks"
-        : "appropriate consequences"
-    }
-    * If unsure, lean toward "bad" for higher difficulties and "good" for lower difficulties
-    
-  - "isStoryDecision": true if the user made a meaningful choice that advances the story, false for questions/clarifications
-  
-  - "progressAdvancement": How much this decision should advance the story (0-10 scale)
-    * Multiply base advancement by ${
-      difficulty.progressMultiplier
-    } for ${missionDifficulty} difficulty
-    * ${missionDifficulty} missions should progress ${
-    difficulty.progressMultiplier < 1
-      ? "more slowly, requiring multiple good decisions"
-      : "at a steady pace"
-  }
-    
-  - "difficultyBonus": Always set to ${
-    difficulty.xpMultiplier
-  } (the XP multiplier for ${missionDifficulty} missions)
-  
-  - IMPORTANT: You are analyzing what the USER said, not what you are saying in response
-  - Examples:
-    * User: "I try to negotiate with the guards" → type: "diplomatic", quality: depends on difficulty and context
-    * User: "I attack the monster" → type: "action", quality: depends on difficulty and situation wisdom
-    * User: "I examine the ancient symbols" → type: "investigation", quality: "good" if appropriate for difficulty level
-    * User: "I plan my next move carefully" → type: "strategic", quality: should be "good" for most difficulties
-    * User: "What's that sound?" → type: "none", isStoryDecision: false
+  LANGUAGE GUIDELINES:
+  - Use "we"/"us" collectively; address the user as "you" when referencing their prior action.
 
-  Progress Guidelines (STORYLINE-DRIVEN):
-  - CRITICAL: Progress is now storyline-based, not arbitrary
-  - NEVER increase progress beyond 100% - mission is complete at 100%
-  - Progress should align with story milestones at 25%, 50%, 75%, and 100%
-  - Small decisions (side conversations, minor choices): 1-3% progress
-  - Major story decisions (key plot points): 5-8% progress  
-  - Milestone-achieving decisions (major story events): 8-15% progress
-  - Bad decisions may decrease progress (setbacks in the story)
-  - Consider current progress (${currentProgress}) and guide toward next milestone
-  - ${missionDifficulty} missions should require ${
-    difficulty.goodDecisionThreshold > 0.6
-      ? "consistently excellent decisions"
-      : difficulty.goodDecisionThreshold > 0.4
-      ? "mostly good decisions"
-      : "reasonable decisions"
-  } to progress smoothly
-  - When progress reaches 100%, the story is COMPLETE - offer only epilogue content
-
-  Choice Guidelines:
-  - FORBIDDEN: Any response that doesn't end with specific options for the user
-  - FORBIDDEN: "Smart move!", "Good choice!", "Let's do X", "We need to Y" without options
-  - FORBIDDEN: Describing what you're going to do without giving the user a choice
-  - FORBIDDEN: Using A/B/C format - present choices naturally in narrative
-  - MANDATORY: Every single response must end with clear options integrated into the story
-  - Make each option clearly different (diplomatic vs action vs strategic)
-  - Be specific, not vague
-  - Present choices naturally: "Do we negotiate or fight?" instead of "A) Negotiate B) Fight"
-  - For ${missionDifficulty} missions: Make choices ${
-    difficulty.goodDecisionThreshold > 0.6
-      ? "more nuanced and complex"
-      : difficulty.goodDecisionThreshold > 0.4
-      ? "moderately challenging"
-      : "straightforward but meaningful"
-  }
-
-  Response Structure (MANDATORY):
-  "[Character Name]: [What happens from their choice]. [New situation]. [Natural question presenting the choices]?"
-  
-  Examples of natural choice presentation:
-  - "Do we set up defenses or enter the ruins immediately?"
-  - "Should we take the narrow passage or the wide path?"
-  - "Do we negotiate with them or try to sneak past?"
-
-  Language Guidelines:
-  - Use "we" and "us" since you're working together with the user
-  - Use "you" when referring to the user's specific actions or decisions
-  - Examples: "We approach the door", "What do we do next?", "You decide to examine the symbols"
-
-  Examples:
-  - WRONG: "Professor Blue: Smart move! Let's take our time to study the mechanism carefully."
-  - RIGHT: "Professor Blue: We examine the mechanism together and find three different activation methods. Do we try the glowing crystal, input the ancient symbols, or use the modern keypad?"
-  
-     EVERY response must give the user a choice. NO EXCEPTIONS.
-
-  VALIDATION CHECK: Before sending your response, ask yourself:
-  1. Does my response end with clear options for the user to choose from?
-  2. Are the choices presented naturally without A/B/C labels?
-  3. Does my response end cleanly with a question mark after the choices?
-  4. Did I avoid adding extra "What do we do" or similar redundant text?
-  5. If any answer is NO, then REWRITE it
-
-  Remember: The user should NEVER have to just say "ok" or "continue" - they should always have meaningful choices to make.
-  
-  CRITICAL: Your userResponse should end immediately after presenting the choices with a question mark. Do NOT add extra prompting text.`;
+  VALIDATION CHECK BEFORE SENDING:
+  1. Ends with user choices?
+  2. No A/B/C labels?
+  3. Ends cleanly with "?"?
+  4. Avoids redundant prompts like "What do we do?"?
+  If any answer is NO, rewrite before responding.`;
 
   try {
-    const result = streamText({
-      model: openai("gpt-4o-mini"),
-      system: enhancedSystem,
-      messages,
-      temperature: 0.7,
-      maxTokens: 800, // Increased to accommodate JSON
+    console.log("[Chat API] Using structured output with schema");
+
+    // Use direct Gemini API call with structured output
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `${enhancedSystem}\n\n${messages
+                    .map(
+                      (m: { role: string; content: string }) =>
+                        `${m.role === "user" ? "User" : "Assistant"}: ${
+                          m.content
+                        }`
+                    )
+                    .join("\n")}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2000,
+            responseMimeType: "application/json",
+            responseSchema: responseSchema,
+          },
+        }),
+      }
+    );
+
+    console.log("[Chat API] Gemini response status:", response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[Chat API] Gemini API error:", errorText);
+      throw new Error(`Gemini API error: ${response.status} ${errorText}`);
+    }
+
+    const geminiData = await response.json();
+    console.log(
+      "[Chat API] Gemini structured response:",
+      JSON.stringify(geminiData).slice(0, 500)
+    );
+
+    let textOutput =
+      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+
+    console.log("[Chat API] Raw JSON output:", textOutput.slice(0, 300));
+
+    // Validate that we got valid JSON
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(textOutput);
+      console.log("[Chat API] Successfully parsed JSON response");
+    } catch (parseError) {
+      console.error("[Chat API] Failed to parse JSON response:", parseError);
+      console.error("[Chat API] Raw response:", textOutput);
+
+      // Attempt to recover from truncated JSON by creating a fallback response
+      console.log("[Chat API] Attempting to recover from truncated JSON...");
+      try {
+        // Try to extract userResponse from the partial JSON
+        const userResponseMatch = textOutput.match(
+          /"userResponse":\s*"([^"]*(?:\\.[^"]*)*)/
+        );
+        const progressMatch = textOutput.match(/"progress":\s*(\d+)/);
+
+        const fallbackResponse = {
+          userResponse: userResponseMatch
+            ? userResponseMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n")
+            : "System: I encountered an issue processing your request. Please try again.",
+          imagePrompt:
+            "A mystical scene in an enchanted forest with soft, ethereal lighting",
+          progress: progressMatch
+            ? parseInt(progressMatch[1])
+            : currentProgress,
+          decisionAnalysis: {
+            type: "none",
+            quality: "good",
+            isStoryDecision: false,
+            progressAdvancement: 0,
+            reasoning: "Recovered from truncated response",
+            difficultyBonus: 1.0,
+          },
+        };
+
+        console.log("[Chat API] Successfully recovered truncated JSON");
+        parsedResponse = fallbackResponse;
+        // Update textOutput to use the fallback
+        textOutput = JSON.stringify(fallbackResponse);
+      } catch (recoveryError) {
+        console.error(
+          "[Chat API] Failed to recover truncated JSON:",
+          recoveryError
+        );
+        throw new Error("Invalid JSON response from Gemini");
+      }
+    }
+
+    // Create a streaming response manually for useChat compatibility
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        // Send the structured response as a single chunk in the format expected by useChat
+        // For data stream protocol, we need to escape the JSON properly and send it as a text part
+        const escapedJson = textOutput
+          .replace(/\\/g, "\\\\")
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, "\\n")
+          .replace(/\r/g, "\\r");
+        const chunk = `0:"${escapedJson}"\n`;
+        console.log("[Chat API] Sending chunk:", chunk.slice(0, 200));
+        controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
     });
 
-    return result.toDataStreamResponse();
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "x-vercel-ai-data-stream": "v1",
+      },
+    });
   } catch (error) {
-    console.error("Error in chat API:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to generate response" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    console.error("[Chat API] Error:", error);
+
+    // Return error in streaming format
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        const errorResponse = JSON.stringify({
+          userResponse:
+            "System: I apologize, but I encountered an error. Please try again.",
+          progress: currentProgress,
+          decisionAnalysis: {
+            type: "none",
+            quality: "bad",
+            isStoryDecision: false,
+            progressAdvancement: 0,
+            reasoning: "System error occurred",
+            difficultyBonus: 1.0,
+          },
+        });
+        const chunk = `0:"${errorResponse.replace(/"/g, '\\"')}"\n`;
+        controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
+      status: 200, // Return 200 to avoid useChat errors
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "x-vercel-ai-data-stream": "v1",
+      },
+    });
   }
 }
