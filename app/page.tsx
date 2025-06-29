@@ -325,7 +325,8 @@ export default function Home() {
           <div className="text-muted-foreground mb-8 max-w-2xl mx-auto text-lg space-y-3">
             <p>
               Welcome to Choice Craft, where your choices shape unique
-              adventures across four distinct worlds.
+              adventures across four distinct worlds. Click on a mission below
+              to begin.
             </p>
             <p>
               Track your progress, earn achievements, and explore dynamically

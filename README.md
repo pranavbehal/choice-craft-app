@@ -23,18 +23,22 @@ An interactive storytelling application where users engage with AI companions ac
 
    - **AI Integration**
 
-     - Advanced language model for dynamic responses
-     - Voice synthesis for character dialogue
-     - Real-time background generation matching story context
+     - Google Gemini 2.5 Flash Lite for fast, intelligent responses
+     - Structured output schema for consistent decision analysis
+     - Voice synthesis with character-specific voices using ElevenLabs
+     - Real-time AI-generated scene backgrounds matching story context
+     - Parallel processing up to 700% faster response times
 
-   - **Rich User Experience**
+   - **User Experience**
 
      - Implemented four unique storylines instead of just one
-     - Users can freely interact using natural language, rather than just occasional choices
-     - Visual character representations
-     - Progress tracking and achievements
-     - Comprehensive help system
-     - Interactive tutorial
+     - Users can freely interact using natural
+       language, rather than just occasional choices
+     - Typewriter effect with synchronized audio narration
+     - Visual character representations with dynamic opacity
+     - Real-time progress tracking and achievements system
+     - Mission resume functionality with chat history persistence
+     - Comprehensive help system with interactive tutorial
 
    - **Data & Progress**
 
@@ -54,11 +58,14 @@ While the basic prompt asked for a simple interactive story with a stop function
 ### 🌟 Core Features
 
 - Four unique story contexts with distinct AI companions
-- Dynamic dialogue system powered by OpenAI's GPT-4o-mini
+- Dynamic dialogue system powered by Google Gemini 2.5 Flash Lite
 - Real-time voice synthesis using ElevenLabs
 - AI-generated scene backgrounds
 - Progress tracking and data visualization
+- Mission resume functionality with complete chat history
 - Interactive help system and onboarding tutorial
+- Achievement system with detailed decision analytics
+- Global leaderboard for increased gamification
 
 ### 🚀 Technical Requirements
 
@@ -82,11 +89,12 @@ npm install
 3. Set up environment variables in a .env file:
 
 ```bash
-OPENAI_API_KEY=your_key_here
+GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_key_here
 ELEVENLABS_API_KEY=your_key_here
 REPLICATE_API_KEY=your_key_here
 SUPABASE_URL=your_url_here
 SUPABASE_ANON_KEY=your_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_key_here
 ```
 
 4. Run the development server:
@@ -112,10 +120,11 @@ bun dev
 - **Database**: Supabase
 - **Authentication**: Supabase Auth (with Google OAuth )
 - **AI Integration**:
-  - OpenAI GPT-4o-mini for dialogue and text generation
+  - Google Gemini 2.5 Flash Lite for dialogue and structured decision analysis
   - ElevenLabs for voice narration
   - Replicate for image generation (specifically the flux-schnell for the images generated in realtime, and flux-1.1-pro for the images generated and stored ahead of time, such as the avatars and backgrounds. Both of these models are from Black Forest Labs )
 - **Data Visualization**: Recharts and shadcn/ui
+- **Chat Integration**: Vercel AI SDK for streaming responses
 - **Other Dependencies**:
   - Lucide React (icons)
   - Zod (Typescript validation)
@@ -165,6 +174,7 @@ bun dev
 - React (MIT License)
 - TypeScript (Apache 2.0 License)
 - Node.js (MIT License)
+- Vercel AI SDK (Apache 2.0 License)
 - Replicate AI and Black Forest Labs image models (all images generated allowed commercial use)
 - UserWay ADA Compliant Accessibility Plugin
 
@@ -188,7 +198,8 @@ bun dev
 
    - Set up Next.js project structure
    - Implemented core features iteratively
-   - Integrated AI services (OpenAI, ElevenLabs, Replicate)
+   - Integrated AI services (Google Gemini, ElevenLabs, Replicate)
+   - Integrated authentication and data storage in various forms with Supabase
    - Added real-time updates and animations
 
 4. **Testing & Refinement**
@@ -233,6 +244,7 @@ bun dev
    - User preferences
    - Achievement tracking
    - Error recovery
+   - Chat persistence and mission resume functionality
 
 ## ♿ Accessibility Features
 
@@ -293,10 +305,11 @@ These accessibility features can be accessed through the UserWay Accessibility w
 ### 🎮 Commands & Controls
 
 - Type messages to interact
-- Use "stop" to end missions
+- Use "stop" to end missions (with progress being saved)
 - Access help via ? button in the corner of all pages
 - Customize settings in profile
 - Export data from results page
+- Resume missions with chat history
 
 ### 🏆 Achievement System
 
@@ -315,7 +328,7 @@ These accessibility features can be accessed through the UserWay Accessibility w
 ### 🔄 Version Control
 
 - Version: 1.0.0
-- Last Updated: December 2024
+- Last Updated: June 2025
 - Platform: Web Browser
 - Framework: Next.js 15
 

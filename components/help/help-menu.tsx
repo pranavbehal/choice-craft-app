@@ -46,6 +46,11 @@ const helpTopics = [
     content:
       "Unlock achievements by completing missions, making specific types of decisions, and reaching milestones. Achievements are categorized by rarity (Common, Rare, Epic, Legendary) and provide XP rewards that contribute to your level and leaderboard ranking. Track your progress toward locked achievements in the Results page.",
   },
+  {
+    title: "FBLA Prompt Correlation",
+    content:
+      "The prompt for this project was to create an interactive story that takes the user's input to change the story's outcomes, while allowing the user to stop the story at any time. I expanded on this prompt to create a fully-functioning, production-grade application that includes immersive storytelling via AI-powered interactions, real-time visuals and narrations, and comprehensive progress tracking. I also added a leaderboard and achievement system to gamify the application.",
+  },
 ];
 
 export function HelpMenu() {
